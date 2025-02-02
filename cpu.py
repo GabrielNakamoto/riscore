@@ -37,6 +37,21 @@ class Opcodes(Enum):
     # load immediate + pc to rd
     LUPCOP = 0b0010111
 
+class Funct3(Enum):
+    ADD = SUB = ADDI = BEQ = JALR = 0b000
+    XOR = XORI = BLT = 0b100
+    OR = ORI = 0b110
+    AND = ANDI = 0b111
+    SLL = SLLI = BNE = 0b001
+    SRL = SRA = SRLI = SRAI = BGE = 0b101
+    SLT = LW = SW = 0b010
+
+class Funct7(Enum):
+    ADD = 0b0000000
+    SUB = 0b0100000
+    SRL = 0b0000000
+    SRA = 0b0100000
+
 class Regfile():
     def __init__(self):
         # x0 -> x31
@@ -60,23 +75,56 @@ class Instruction():
 
     def Decode(self):
         def decode_field(start, end):
-            return (self.binary >> start) & ((1 << (end + 1)) - 1)
+            return (self.binary >> start) & ((1 << ((end - start) + 1)) - 1)
 
-        self.opcode = Opcodes(decode_field(0, 7))
+        # def sign_extend(imm, length, start, end):
+
+        self.opcode = Opcodes(decode_field(0, 6))
         
-        # same location in instruction for each type
         # store register addresses
         self.rs1 = decode_field(15, 19)
         self.rs2 = decode_field(20, 24)
         self.rd = decode_field(7, 11)
 
-        self.funct3 = decode_field(12, 14)
-        self.funct7 = decode_field(25, 31)
+        self.funct3 = Funct3(decode_field(12, 14))
+        self.funct7 = Funct7(decode_field(25, 31))
 
-    def Parse(self):
-        print("Parsing...")
+    def Execute(self):
         if self.opcode == Opcodes.ROP:
-            print("register-register operation")
+            return self._Rop()
+        elif self.opcode == Opcodes.IOP:
+            return self._Iop()
+
+    def _Rop(self):
+        if self.funct3 == Funct3.ADD:
+            if self.funct7 == Funct7.ADD:
+                regfile[self.rd] = regfile[self.rs1] + regfile[self.rs2]
+            else:
+                regfile[self.rd] = regfile[self.rs1] - regfile[self.rs2]
+
+        elif self.funct3 == Funct3.XOR:
+            regfile[self.rd] = regfile[self.rs1] ^ regfile[self.rs2]
+
+        elif self.funct3 == Funct3.OR:
+            regfile[self.rd] = regfile[self.rs1] | regfile[self.rs2]
+
+        elif self.funct3 == Funct3.AND:
+            regfile[self.rd] = regfile[self.rs1] & regfile[self.rs2]
+
+        elif self.funct3 == Funct3.SLL:
+            regfile[self.rd] = regfile[self.rs1] << regfile[self.rs2]
+
+        elif self.funct3 == Funct3.SRL:
+            if self.funct7 == Funct7.SRL:
+                regfile[self.rd] = regfile[self.rs1] >> regfile[self.rs2]
+            else:
+                # sign extend
+                print('nothing here yet')
+
+        elif self.funct3 == Funct3.SLT:
+            regfile[self.rd] = 1 if (self.rs1 < self.rs2) else 0
+
+    # def _Iop(self):
 
 
 def step():
@@ -91,12 +139,9 @@ def step():
 
     # decode
     ins.Decode()
-    ins.Parse()
-
-    # opcode takes up first 7 bits
-    # but with little endian thats the last 7?
 
     # execute
+    ins.Execute()
 
 if __name__ == "__main__":
     PC = 31
@@ -107,5 +152,9 @@ if __name__ == "__main__":
     # open them in elf format?
     # extract register data and
     # store it in the core's 'register file'
-    regfile[PC] = 0x00000033
+    # add x2, x5, x7
+    regfile[5] = 10
+    regfile[7] = 6
+    regfile[PC] = 0b00000000011100101000000100110011
     step()
+    print(regfile[2])
